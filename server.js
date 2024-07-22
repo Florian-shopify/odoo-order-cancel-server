@@ -11,19 +11,38 @@ app.post('/webhooks/orders/cancelled', async (req, res) => {
   
   console.log('Received order cancellation webhook:', cancelledOrder);
 
+  const payload = {
+    jsonrpc: "2.0",
+    method: "call",
+    params: {
+      service: "object",
+      method: "execute_kw",
+      args: [
+        process.env.ODOO_DB,
+        Number(process.env.ODOO_USER_ID),  // Convert user ID to number
+        process.env.ODOO_API_KEY,
+        "sale.order",
+        "action_cancel",
+        [[cancelledOrder.id]]
+      ]
+    },
+    id: 1
+  };
+
   try {
-    const response = await axios.post(`${process.env.ODOO_API_URL}/api/annuler_commande`, {
-      order_id: cancelledOrder.id,
-    }, {
-      auth: {
-        username: process.env.ODOO_API_USER,
-        password: process.env.ODOO_API_KEY
+    const response = await axios.post(`${process.env.ODOO_API_URL}/jsonrpc`, payload, {
+      headers: {
+        "Content-Type": "application/json"
       }
     });
 
-    if (response.status === 200) {
+    console.log('Response from Odoo API:', response.data);
+
+    if (response.data.result) {
+      console.log('Order cancellation processed successfully in Odoo');
       res.status(200).send('Order cancellation processed successfully');
     } else {
+      console.log('Failed to process order cancellation in Odoo');
       res.status(500).send('Failed to process order cancellation');
     }
   } catch (error) {
