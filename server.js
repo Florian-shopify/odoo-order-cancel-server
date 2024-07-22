@@ -15,7 +15,7 @@ async function callOdooMethod(model, method, args) {
       method: "execute_kw",
       args: [
         process.env.ODOO_DB,
-        Number(process.env.ODOO_USER_ID),
+        Number(process.env.ODOO_USER_ID),  // Ensure user ID is converted to a number
         process.env.ODOO_API_KEY,
         model,
         method,
