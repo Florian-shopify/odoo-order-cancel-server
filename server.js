@@ -6,11 +6,7 @@ const axios = require('axios');
 const app = express();
 app.use(bodyParser.json());
 
-app.post('/webhooks/orders/cancelled', async (req, res) => {
-  const cancelledOrder = req.body;
-  
-  console.log('Received order cancellation webhook:', cancelledOrder);
-
+async function callOdooMethod(model, method, args) {
   const payload = {
     jsonrpc: "2.0",
     method: "call",
@@ -19,26 +15,39 @@ app.post('/webhooks/orders/cancelled', async (req, res) => {
       method: "execute_kw",
       args: [
         process.env.ODOO_DB,
-        Number(process.env.ODOO_USER_ID),  // Convert user ID to number
+        Number(process.env.ODOO_USER_ID),
         process.env.ODOO_API_KEY,
-        "sale.order",
-        "action_cancel",
-        [[cancelledOrder.id]]
+        model,
+        method,
+        args
       ]
     },
     id: 1
   };
 
+  const response = await axios.post(`${process.env.ODOO_API_URL}/jsonrpc`, payload, {
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+
+  return response.data;
+}
+
+app.post('/webhooks/orders/cancelled', async (req, res) => {
+  const cancelledOrder = req.body;
+  console.log('Received order cancellation webhook:', cancelledOrder);
+
   try {
-    const response = await axios.post(`${process.env.ODOO_API_URL}/jsonrpc`, payload, {
-      headers: {
-        "Content-Type": "application/json"
-      }
-    });
+    // Step 1: Unlock the order
+    const unlockResponse = await callOdooMethod('sale.order', 'action_unlock', [[cancelledOrder.id]]);
+    console.log('Unlock response from Odoo API:', unlockResponse);
 
-    console.log('Response from Odoo API:', response.data);
+    // Step 2: Cancel the order
+    const cancelResponse = await callOdooMethod('sale.order', 'action_cancel', [[cancelledOrder.id]]);
+    console.log('Cancel response from Odoo API:', cancelResponse);
 
-    if (response.data.result) {
+    if (cancelResponse.result) {
       console.log('Order cancellation processed successfully in Odoo');
       res.status(200).send('Order cancellation processed successfully');
     } else {
